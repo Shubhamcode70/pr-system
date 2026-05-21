@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Input, Select, Textarea } from "@/components/ui";
 import { FieldLabel } from "@/components/FieldLabel";
@@ -35,6 +35,8 @@ export default function NewPRClient({ masters }: { masters: Master }) {
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+  const submittingRef = useRef(false); // instant guard against double-click double-submit
 
   // Header
   const [hdr, setHdr] = useState({
@@ -60,13 +62,99 @@ export default function NewPRClient({ masters }: { masters: Master }) {
     setLines(prev => prev.filter((_, idx) => idx !== i).map((l, idx) => ({ ...l, item_no: idx + 1 })));
   }
 
+  function validate(action: "draft" | "submit"): string[] {
+    const errors: string[] = [];
+    // For draft, only require minimal fields. For submit, full validation.
+    if (action === "submit") {
+      if (!hdr.requirement_received_from.trim()) errors.push("Header: Requirement Received From is required.");
+      if (!hdr.department.trim()) errors.push("Header: Department is required.");
+      if (!hdr.location.trim()) errors.push("Header: Location is required.");
+      if (!hdr.purpose_of_procurement.trim()) errors.push("Header: Purpose of Procurement is required.");
+      if (hdr.pr_type === "CAPEX") {
+        if (!hdr.cr_id) errors.push("Header: CR ID is required for CAPEX PRs.");
+        if (!hdr.asset_number) errors.push("Header: Asset Number is required for CAPEX PRs.");
+      }
+      if (hdr.single_vendor_flag && !hdr.single_vendor_justification.trim()) {
+        errors.push("Header: Single Vendor Justification is required when single-vendor flag is set.");
+      }
+      lines.forEach((l, idx) => {
+        const n = idx + 1;
+        if (!l.short_text.trim()) errors.push(`Line ${n}: Short Text is required.`);
+        if (!l.uom) errors.push(`Line ${n}: Unit of Measure is required.`);
+        if (!l.quantity || l.quantity <= 0) errors.push(`Line ${n}: Quantity must be greater than 0.`);
+        if (l.valuation_price === null || l.valuation_price === undefined || l.valuation_price < 0) errors.push(`Line ${n}: Valuation Price must be 0 or greater.`);
+        if (!l.delivery_date) errors.push(`Line ${n}: Delivery Date is required.`);
+        else {
+          const d = new Date(l.delivery_date);
+          const today = new Date(); today.setHours(0,0,0,0);
+          if (d < today) errors.push(`Line ${n}: Delivery Date cannot be in the past.`);
+        }
+        if (!l.material_group) errors.push(`Line ${n}: Material Group is required.`);
+        if (!l.plant_code) errors.push(`Line ${n}: Plant Code is required.`);
+        if (!l.purchasing_group) errors.push(`Line ${n}: Purchasing Group is required.`);
+        if (!l.requisitioner_name.trim()) errors.push(`Line ${n}: Requisitioner is required.`);
+        if (!l.acct_assignment_qty || l.acct_assignment_qty <= 0) errors.push(`Line ${n}: Acct. Assignment Qty must be greater than 0.`);
+        if (!l.cost_centre) errors.push(`Line ${n}: Cost Centre is required.`);
+        if (!l.gl_account) errors.push(`Line ${n}: G/L Account is required.`);
+        if (!l.cost_bearer) errors.push(`Line ${n}: Cost Bearer is required.`);
+      });
+    } else {
+      // Draft: at least one identifiable field
+      if (!hdr.purpose_of_procurement.trim() && !lines.some(l => l.short_text.trim())) {
+        errors.push("Add at least a Purpose or one line item description before saving as draft.");
+      }
+    }
+    return errors;
+  }
+
+  function friendlyError(raw: string): string {
+    // Translate common Postgres / Supabase errors into actionable messages
+    const r = raw.toLowerCase();
+    if (r.includes("pr_line_items_uom_fkey")) return "One or more lines have an invalid Unit of Measure. Please pick a UoM from the dropdown for every line.";
+    if (r.includes("pr_line_items_material_group_fkey")) return "One or more lines have an invalid Material Group. Please re-pick from the dropdown.";
+    if (r.includes("pr_line_items_plant_code_fkey")) return "One or more lines have an invalid Plant Code. Please re-pick from the dropdown.";
+    if (r.includes("pr_line_items_purchasing_group_fkey")) return "One or more lines have an invalid Purchasing Group. Please re-pick from the dropdown.";
+    if (r.includes("pr_line_items_cost_centre_fkey")) return "One or more lines have an invalid Cost Centre. Please re-pick from the dropdown.";
+    if (r.includes("pr_line_items_gl_account_fkey")) return "One or more lines have an invalid G/L Account. Please re-pick from the dropdown.";
+    if (r.includes("pr_line_items_cost_bearer_fkey")) return "One or more lines have an invalid Cost Bearer. Please re-pick from the dropdown.";
+    if (r.includes("foreign key") && r.includes("cr_id")) return "Selected CR ID does not exist. Please pick from the CR ID dropdown.";
+    if (r.includes("foreign key") && r.includes("asset_number")) return "Selected Asset Number does not exist. Please pick from the Asset Number dropdown.";
+    if (r.includes("violates check constraint") && r.includes("cr_id")) return "CAPEX PRs require both CR ID and Asset Number.";
+    if (r.includes("infinite recursion")) return "Server policy error. Please refresh the page and try again — if it persists, contact the admin.";
+    if (r.includes("no active approval rule")) return "No active approval rule matches the PR total. Please ask an admin to configure approval rules.";
+    if (r.includes("rls") || r.includes("row-level security") || r.includes("policy")) return "You don't have permission to perform this action.";
+    return raw;
+  }
+
   async function submit(action: "draft" | "submit") {
-    setBusy(true); setErr(null);
-    const res = await createPR({ header: hdr, lines, action });
-    setBusy(false);
-    if (!("id" in res)) { setErr(res.error); return; }
-    router.push(`/pr/${res.id}`);
-    router.refresh();
+    if (submittingRef.current) return; // instant guard against rapid double-click
+    setErr(null); setFieldErrors([]);
+
+    const errs = validate(action);
+    if (errs.length > 0) {
+      setFieldErrors(errs);
+      setErr(`Please fix ${errs.length} issue${errs.length === 1 ? "" : "s"} before ${action === "submit" ? "submitting" : "saving"}.`);
+      return;
+    }
+
+    submittingRef.current = true;
+    setBusy(true);
+    try {
+      const res = await createPR({ header: hdr, lines, action });
+      if (!("id" in res)) {
+        setErr(friendlyError(res.error));
+        submittingRef.current = false;
+        setBusy(false);
+        return;
+      }
+      // Keep busy=true and submittingRef=true during navigation so the buttons stay disabled
+      router.push(`/pr/${res.id}`);
+      router.refresh();
+    } catch (e: any) {
+      setErr(friendlyError(e?.message || "Submission failed. Please try again."));
+      submittingRef.current = false;
+      setBusy(false);
+    }
   }
 
   return (
@@ -256,10 +344,19 @@ export default function NewPRClient({ masters }: { masters: Master }) {
             </table>
           </div>
 
-          {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
+          {err && (
+            <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3">
+              <p className="text-sm font-medium text-red-800">{err}</p>
+              {fieldErrors.length > 0 && (
+                <ul className="mt-2 list-disc pl-5 text-xs text-red-700 space-y-0.5 max-h-48 overflow-y-auto">
+                  {fieldErrors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-4">
-            <Button variant="secondary" onClick={() => setStep(2)}>← Back</Button>
+            <Button variant="secondary" onClick={() => setStep(2)} disabled={busy}>← Back</Button>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => submit("draft")} disabled={busy}>Save as Draft</Button>
               <Button onClick={() => submit("submit")} disabled={busy}>{busy ? "Submitting…" : "Submit for Approval"}</Button>
