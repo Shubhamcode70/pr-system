@@ -17,7 +17,7 @@ export default function ApproveActions({ prId }: { prId: string }) {
     setBusy(true); setErr(null);
     const res = await decide({ prId, decision, comment: comment.trim() || null });
     setBusy(false);
-    if ("error" in res) { setErr(res.error); return; }
+    if (!("ok" in res)) { setErr(res.error); return; }
     router.push("/queue");
     router.refresh();
   }

@@ -2,7 +2,7 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { sendEmail, emailTemplate } from "@/lib/email";
 
-export async function decide(input: { prId: string; decision: "approve" | "reject" | "revert"; comment: string | null; }) {
+export async function decide(input: { prId: string; decision: "approve" | "reject" | "revert"; comment: string | null; }): Promise<{ ok: true } | { error: string }> {
   const supabase = supabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };

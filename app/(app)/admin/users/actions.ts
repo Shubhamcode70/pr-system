@@ -9,21 +9,21 @@ async function requireAdmin() {
   return me?.is_admin ? user : null;
 }
 
-export async function toggleAdmin(userId: string, value: boolean) {
+export async function toggleAdmin(userId: string, value: boolean): Promise<{ ok: true } | { error: string }> {
   const me = await requireAdmin();
   if (!me) return { error: "Not admin" };
   const sb = supabaseAdmin();
   const { error } = await sb.from("app_users").update({ is_admin: value }).eq("id", userId);
   return error ? { error: error.message } : { ok: true };
 }
-export async function toggleActive(userId: string, value: boolean) {
+export async function toggleActive(userId: string, value: boolean): Promise<{ ok: true } | { error: string }> {
   const me = await requireAdmin();
   if (!me) return { error: "Not admin" };
   const sb = supabaseAdmin();
   const { error } = await sb.from("app_users").update({ is_active: value }).eq("id", userId);
   return error ? { error: error.message } : { ok: true };
 }
-export async function toggleMembership(userId: string, groupId: string, value: boolean) {
+export async function toggleMembership(userId: string, groupId: string, value: boolean): Promise<{ ok: true } | { error: string }> {
   const me = await requireAdmin();
   if (!me) return { error: "Not admin" };
   const sb = supabaseAdmin();

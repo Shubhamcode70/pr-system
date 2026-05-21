@@ -31,11 +31,11 @@ export default function UsersClient({ users, groups, members }: {
           {users.map(u => (
             <tr key={u.id} className="border-t border-slate-100">
               <td className="px-3 py-2"><div className="font-medium">{u.full_name || "—"}</div><div className="text-xs text-slate-500">{u.email}</div></td>
-              <td className="px-3 py-2"><input type="checkbox" checked={u.is_admin} disabled={pending} onChange={() => start(async () => { const r = await toggleAdmin(u.id, !u.is_admin); setMsg(r.ok ? "Saved." : r.error || "Failed"); })} /></td>
-              <td className="px-3 py-2"><input type="checkbox" checked={u.is_active} disabled={pending} onChange={() => start(async () => { const r = await toggleActive(u.id, !u.is_active); setMsg(r.ok ? "Saved." : r.error || "Failed"); })} /></td>
+              <td className="px-3 py-2"><input type="checkbox" checked={u.is_admin} disabled={pending} onChange={() => start(async () => { const r = await toggleAdmin(u.id, !u.is_admin); setMsg("ok" in r ? "Saved." : r.error); })} /></td>
+              <td className="px-3 py-2"><input type="checkbox" checked={u.is_active} disabled={pending} onChange={() => start(async () => { const r = await toggleActive(u.id, !u.is_active); setMsg("ok" in r ? "Saved." : r.error); })} /></td>
               {groups.map(g => (
                 <td key={g.id} className="px-3 py-2">
-                  <input type="checkbox" checked={isMember(u.id, g.id)} disabled={pending} onChange={(e) => start(async () => { const r = await toggleMembership(u.id, g.id, e.target.checked); setMsg(r.ok ? "Saved." : r.error || "Failed"); })} />
+                  <input type="checkbox" checked={isMember(u.id, g.id)} disabled={pending} onChange={(e) => start(async () => { const r = await toggleMembership(u.id, g.id, e.target.checked); setMsg("ok" in r ? "Saved." : r.error); })} />
                 </td>
               ))}
             </tr>

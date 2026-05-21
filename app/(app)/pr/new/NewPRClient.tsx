@@ -62,7 +62,7 @@ export default function NewPRClient({ masters }: { masters: Master }) {
     setBusy(true); setErr(null);
     const res = await createPR({ header: hdr, lines, action });
     setBusy(false);
-    if ("error" in res) { setErr(res.error); return; }
+    if (!("id" in res)) { setErr(res.error); return; }
     router.push(`/pr/${res.id}`);
     router.refresh();
   }
