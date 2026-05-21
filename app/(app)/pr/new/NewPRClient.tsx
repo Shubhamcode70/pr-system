@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card, Input, Select, Textarea } from "@/components/ui";
 import { FieldLabel } from "@/components/FieldLabel";
 import InstructionsPopup from "@/components/InstructionsPopup";
+import { QuotationsPanel, type Quote } from "@/components/QuotationsPanel";
 import { inr } from "@/lib/inr";
 import { createPR } from "./actions";
 
@@ -16,6 +17,7 @@ type Master = {
   gls: { code: string; name: string; expense_type: string }[];
   crs: { cr_id: string; title: string }[];
   assets: { asset_no: string; description: string; cr_id: string | null }[];
+  vendors: { id: string; vendor_code: string; legal_name: string; payment_terms: string; currency: string }[];
 };
 
 type Line = {
@@ -47,6 +49,7 @@ export default function NewPRClient({ masters }: { masters: Master }) {
   });
 
   const [lines, setLines] = useState<Line[]>([blankLine(1)]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
   const total = lines.reduce((s, l) => s + (l.quantity * l.valuation_price), 0);
   const assetsForCR = masters.assets.filter(a => !hdr.cr_id || a.cr_id === hdr.cr_id);
 
@@ -140,7 +143,7 @@ export default function NewPRClient({ masters }: { masters: Master }) {
     submittingRef.current = true;
     setBusy(true);
     try {
-      const res = await createPR({ header: hdr, lines, action });
+      const res = await createPR({ header: hdr, lines, quotes, action });
       if (!("id" in res)) {
         setErr(friendlyError(res.error));
         submittingRef.current = false;
@@ -162,7 +165,7 @@ export default function NewPRClient({ masters }: { masters: Master }) {
       <InstructionsPopup />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">New Purchase Request</h1>
-        <div className="text-sm text-slate-500">Step {step} of 3</div>
+        <div className="text-sm text-slate-500">Step {step} of 4</div>
       </div>
 
       {/* Step 1 — Header (SAP Section 1) */}
@@ -297,16 +300,28 @@ export default function NewPRClient({ masters }: { masters: Master }) {
             <div className="text-lg">Total: <span className="font-bold">{inr(total)}</span></div>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setStep(1)}>← Back</Button>
-              <Button onClick={() => setStep(3)}>Review →</Button>
+              <Button onClick={() => setStep(3)}>Next: Vendor Quotations →</Button>
             </div>
           </div>
         </Card>
       )}
 
-      {/* Step 3 — Review & Submit */}
+      {/* Step 3 — Vendor Quotations (new in Phase 2) */}
       {step === 3 && (
         <Card className="space-y-4">
-          <h2 className="text-lg font-semibold">Section 3 — Review & Submit</h2>
+          <h2 className="text-lg font-semibold">Section 3 — Vendor Quotations</h2>
+          <QuotationsPanel vendors={masters.vendors} quotes={quotes} setQuotes={setQuotes} prTotal={total} />
+          <div className="flex items-center justify-between pt-4 border-t">
+            <Button variant="secondary" onClick={() => setStep(2)}>← Back</Button>
+            <Button onClick={() => setStep(4)}>Review →</Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Step 4 — Review & Submit */}
+      {step === 4 && (
+        <Card className="space-y-4">
+          <h2 className="text-lg font-semibold">Section 4 — Review & Submit</h2>
           <p className="text-sm text-slate-600">Confirm and submit. Once submitted, the PR enters the approval workflow based on the total amount.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -356,7 +371,7 @@ export default function NewPRClient({ masters }: { masters: Master }) {
           )}
 
           <div className="flex items-center justify-between pt-4">
-            <Button variant="secondary" onClick={() => setStep(2)} disabled={busy}>← Back</Button>
+            <Button variant="secondary" onClick={() => setStep(3)} disabled={busy}>← Back</Button>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => submit("draft")} disabled={busy}>Save as Draft</Button>
               <Button onClick={() => submit("submit")} disabled={busy}>{busy ? "Submitting…" : "Submit for Approval"}</Button>

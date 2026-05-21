@@ -13,6 +13,7 @@ export default async function AdminHome() {
 
   const tiles = [
     { href: "/admin/users", title: "Users & Role Groups", body: "Manage users, assign role groups, promote admins." },
+    { href: "/admin/vendors", title: "Vendors", body: "Vendor master — GSTIN, PAN, MSME, banking, payment terms." },
     { href: "/admin/rules", title: "Approval Rules", body: "Amount-based, up to 5 levels. Configurable per range." },
     { href: "/admin/master", title: "Master Data", body: "UoM, Material Groups, Plants, Cost Centres, G/L Accounts, etc." },
     { href: "/admin/audit", title: "Audit Log", body: "Every create, update, delete, and approval action." },

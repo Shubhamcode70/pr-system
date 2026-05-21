@@ -5,6 +5,7 @@ import { sendEmail, emailTemplate } from "@/lib/email";
 export async function createPR(input: {
   header: any;
   lines: any[];
+  quotes?: any[];
   action: "draft" | "submit";
 }): Promise<{ id: string } | { error: string }> {
   const supabase = supabaseServer();
@@ -86,6 +87,34 @@ export async function createPR(input: {
     else if (m.includes("gl_account_fkey")) friendly = "One or more lines have an invalid G/L Account. Please re-pick from the dropdown.";
     else if (m.includes("infinite recursion")) friendly = "Server permission error (RLS). Refresh the page and try again.";
     return { error: friendly };
+  }
+
+  // Insert quotations (optional, Phase 2 feature)
+  const quotes = (input.quotes || []).filter(q => q.vendor_id);
+  if (quotes.length > 0) {
+    const selectedCount = quotes.filter(q => q.is_selected).length;
+    if (selectedCount !== 1) {
+      // Ensure exactly one is selected — default to the first
+      quotes.forEach((q, i) => q.is_selected = i === 0);
+    }
+    const quotePayload = quotes.map(q => ({
+      pr_id: pr.id,
+      vendor_id: q.vendor_id,
+      quote_reference: q.quote_reference?.trim() || null,
+      quote_date: q.quote_date || null,
+      validity_date: q.validity_date || null,
+      total_amount: Number(q.total_amount) || 0,
+      currency: q.currency || "INR",
+      payment_terms_offered: q.payment_terms_offered || null,
+      delivery_lead_time_days: q.delivery_lead_time_days === "" || q.delivery_lead_time_days === null ? null : Number(q.delivery_lead_time_days),
+      notes: q.notes?.trim() || null,
+      is_selected: !!q.is_selected
+    }));
+    const { error: qErr } = await supabase.from("pr_quotations").insert(quotePayload);
+    if (qErr) {
+      await supabase.from("purchase_requests").delete().eq("id", pr.id);
+      return { error: `Quotations: ${qErr.message}` };
+    }
   }
 
   if (input.action === "draft") return { id: pr.id };
