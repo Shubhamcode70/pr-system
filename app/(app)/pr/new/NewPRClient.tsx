@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui";
+import { Button, Card, Input, Select, Textarea } from "@/components/ui";
+import { FieldLabel } from "@/components/FieldLabel";
+import InstructionsPopup from "@/components/InstructionsPopup";
 import { inr } from "@/lib/inr";
 import { createPR } from "./actions";
 
@@ -69,37 +71,39 @@ export default function NewPRClient({ masters }: { masters: Master }) {
 
   return (
     <div className="space-y-6">
+      <InstructionsPopup />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">New Purchase Request</h1>
         <div className="text-sm text-slate-500">Step {step} of 3</div>
       </div>
 
-      {/* Step 1 — Header */}
+      {/* Step 1 — Header (SAP Section 1) */}
       {step === 1 && (
         <Card className="space-y-4">
-          <h2 className="text-lg font-semibold">Section 1 — Header</h2>
+          <h2 className="text-lg font-semibold">Section 1 — Header Level Fields</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><Label required>Requirement Received From</Label><Input value={hdr.requirement_received_from} onChange={e => setHdr({ ...hdr, requirement_received_from: e.target.value })} /></div>
-            <div><Label required>Department</Label><Input value={hdr.department} onChange={e => setHdr({ ...hdr, department: e.target.value })} /></div>
-            <div><Label required>Location</Label><Input value={hdr.location} onChange={e => setHdr({ ...hdr, location: e.target.value })} /></div>
-            <div><Label required>PR Type</Label>
+            <div><FieldLabel required helpKey="requirement_received_from">Requirement Received From</FieldLabel><Input value={hdr.requirement_received_from} onChange={e => setHdr({ ...hdr, requirement_received_from: e.target.value })} /></div>
+            <div><FieldLabel required helpKey="department">Department</FieldLabel><Input value={hdr.department} onChange={e => setHdr({ ...hdr, department: e.target.value })} /></div>
+            <div><FieldLabel required helpKey="location">Location</FieldLabel><Input value={hdr.location} onChange={e => setHdr({ ...hdr, location: e.target.value })} /></div>
+            <div><FieldLabel required helpKey="pr_type">PR Type</FieldLabel>
               <Select value={hdr.pr_type} onChange={e => setHdr({ ...hdr, pr_type: e.target.value as "CAPEX" | "OPEX", cr_id: "", asset_number: "" })}>
                 <option value="OPEX">OPEX</option>
                 <option value="CAPEX">CAPEX</option>
               </Select>
             </div>
           </div>
-          <div><Label required>Purpose of Procurement</Label><Textarea rows={3} value={hdr.purpose_of_procurement} onChange={e => setHdr({ ...hdr, purpose_of_procurement: e.target.value })} /></div>
+          <div><FieldLabel required helpKey="purpose_of_procurement">Purpose of Procurement</FieldLabel><Textarea rows={3} value={hdr.purpose_of_procurement} onChange={e => setHdr({ ...hdr, purpose_of_procurement: e.target.value })} /></div>
 
           {hdr.pr_type === "CAPEX" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-amber-50 border border-amber-200 rounded">
-              <div><Label required>CR ID</Label>
+              <p className="md:col-span-2 text-xs text-amber-900"><b>CAPEX PRs:</b> CR ID and Asset Number are mandatory before approval.</p>
+              <div><FieldLabel required helpKey="cr_id">CR ID</FieldLabel>
                 <Select value={hdr.cr_id} onChange={e => setHdr({ ...hdr, cr_id: e.target.value, asset_number: "" })}>
                   <option value="">— select —</option>
                   {masters.crs.map(c => <option key={c.cr_id} value={c.cr_id}>{c.cr_id} — {c.title}</option>)}
                 </Select>
               </div>
-              <div><Label required>Asset Number</Label>
+              <div><FieldLabel required helpKey="asset_number">Asset Number</FieldLabel>
                 <Select value={hdr.asset_number} onChange={e => setHdr({ ...hdr, asset_number: e.target.value })}>
                   <option value="">— select —</option>
                   {assetsForCR.map(a => <option key={a.asset_no} value={a.asset_no}>{a.asset_no} — {a.description}</option>)}
@@ -113,9 +117,9 @@ export default function NewPRClient({ masters }: { masters: Master }) {
             <label htmlFor="sv" className="text-sm">Single vendor being considered</label>
           </div>
           {hdr.single_vendor_flag && (
-            <div><Label required>Single Vendor Justification</Label><Textarea rows={3} value={hdr.single_vendor_justification} onChange={e => setHdr({ ...hdr, single_vendor_justification: e.target.value })} /></div>
+            <div><FieldLabel required helpKey="single_vendor_justification">Single Vendor Justification</FieldLabel><Textarea rows={3} value={hdr.single_vendor_justification} onChange={e => setHdr({ ...hdr, single_vendor_justification: e.target.value })} /></div>
           )}
-          <div><Label>Preferred Vendor (optional)</Label><Input value={hdr.preferred_vendor_name} onChange={e => setHdr({ ...hdr, preferred_vendor_name: e.target.value })} /></div>
+          <div><FieldLabel helpKey="preferred_vendor_name">Preferred Vendor (optional)</FieldLabel><Input value={hdr.preferred_vendor_name} onChange={e => setHdr({ ...hdr, preferred_vendor_name: e.target.value })} /></div>
 
           <div className="flex justify-end pt-4">
             <Button onClick={() => setStep(2)}>Next: Line Items →</Button>
@@ -123,11 +127,11 @@ export default function NewPRClient({ masters }: { masters: Master }) {
         </Card>
       )}
 
-      {/* Step 2 — Lines */}
+      {/* Step 2 — Lines (SAP Section 2: 2A + 2B + 2C) */}
       {step === 2 && (
         <Card className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Section 2 — Line Items ({lines.length}/100)</h2>
+            <h2 className="text-lg font-semibold">Section 2 — Item Level Fields ({lines.length}/100)</h2>
             <Button variant="secondary" onClick={addLine} disabled={lines.length >= 100}>+ Add Line</Button>
           </div>
 
@@ -138,60 +142,60 @@ export default function NewPRClient({ masters }: { masters: Master }) {
                 <button onClick={() => removeLine(i)} disabled={lines.length === 1} className="text-sm text-red-600 hover:underline disabled:opacity-30">Remove</button>
               </div>
 
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">2A · Basic Item Details</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">▸ 2A · Basic Item Details</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                <div className="md:col-span-3"><Label required>Short Text</Label><Input value={l.short_text} onChange={e => updLine(i, { short_text: e.target.value })} /></div>
-                <div><Label required>UoM</Label>
+                <div className="md:col-span-3"><FieldLabel required helpKey="short_text">Short Text (PR Line-item Details)</FieldLabel><Input value={l.short_text} onChange={e => updLine(i, { short_text: e.target.value })} /></div>
+                <div><FieldLabel required helpKey="uom">Unit of Measure (UoM)</FieldLabel>
                   <Select value={l.uom} onChange={e => updLine(i, { uom: e.target.value })}>
                     <option value="">—</option>
                     {masters.uoms.map(u => <option key={u.code} value={u.code}>{u.code} — {u.description}</option>)}
                   </Select>
                 </div>
-                <div><Label required>Quantity</Label><Input type="number" step="0.001" min={0.001} value={l.quantity} onChange={e => updLine(i, { quantity: parseFloat(e.target.value) || 0 })} /></div>
-                <div><Label required>Valuation Price (₹)</Label><Input type="number" step="0.01" min={0} value={l.valuation_price} onChange={e => updLine(i, { valuation_price: parseFloat(e.target.value) || 0 })} /></div>
-                <div><Label>Total Value</Label><Input value={inr(l.quantity * l.valuation_price)} readOnly className="bg-slate-100" /></div>
-                <div><Label required>Delivery Date</Label><Input type="date" value={l.delivery_date} onChange={e => updLine(i, { delivery_date: e.target.value })} /></div>
+                <div><FieldLabel required helpKey="quantity">Quantity</FieldLabel><Input type="number" step="0.001" min={0.001} value={l.quantity} onChange={e => updLine(i, { quantity: parseFloat(e.target.value) || 0 })} /></div>
+                <div><FieldLabel required helpKey="valuation_price">Valuation Price (Val. Price)</FieldLabel><Input type="number" step="0.01" min={0} value={l.valuation_price} onChange={e => updLine(i, { valuation_price: parseFloat(e.target.value) || 0 })} /></div>
+                <div><FieldLabel helpKey="total_value">Total Value</FieldLabel><Input value={inr(l.quantity * l.valuation_price)} readOnly className="bg-slate-100" /></div>
+                <div><FieldLabel required helpKey="delivery_date">Delivery Date</FieldLabel><Input type="date" value={l.delivery_date} onChange={e => updLine(i, { delivery_date: e.target.value })} /></div>
               </div>
 
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">2B · Classification & Logistics</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">▸ 2B · Classification & Logistics</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                <div><Label required>Material Group</Label>
+                <div><FieldLabel required helpKey="material_group">Material Group</FieldLabel>
                   <Select value={l.material_group} onChange={e => updLine(i, { material_group: e.target.value })}>
                     <option value="">—</option>
                     {masters.mgs.map(m => <option key={m.code} value={m.code}>{m.code} — {m.name}</option>)}
                   </Select>
                 </div>
-                <div><Label required>Plant Code</Label>
+                <div><FieldLabel required helpKey="plant_code">Plant Code</FieldLabel>
                   <Select value={l.plant_code} onChange={e => updLine(i, { plant_code: e.target.value })}>
                     <option value="">—</option>
                     {masters.plants.map(p => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
                   </Select>
                 </div>
-                <div><Label required>Purchasing Group</Label>
+                <div><FieldLabel required helpKey="purchasing_group">Purchasing Group (PGr)</FieldLabel>
                   <Select value={l.purchasing_group} onChange={e => updLine(i, { purchasing_group: e.target.value })}>
                     <option value="">—</option>
                     {masters.pgs.map(p => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
                   </Select>
                 </div>
-                <div><Label required>Requisitioner Name</Label><Input value={l.requisitioner_name} onChange={e => updLine(i, { requisitioner_name: e.target.value })} /></div>
+                <div><FieldLabel required helpKey="requisitioner_name">Requisitioner</FieldLabel><Input value={l.requisitioner_name} onChange={e => updLine(i, { requisitioner_name: e.target.value })} /></div>
               </div>
 
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">2C · Account Assignment</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">▸ 2C · Account Assignment</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div><Label required>Acct. Assignment Qty</Label><Input type="number" step="0.001" min={0.001} value={l.acct_assignment_qty} onChange={e => updLine(i, { acct_assignment_qty: parseFloat(e.target.value) || 0 })} /></div>
-                <div><Label required>Cost Centre</Label>
+                <div><FieldLabel required helpKey="acct_assignment_qty">Quantity (Acct. Assignment)</FieldLabel><Input type="number" step="0.001" min={0.001} value={l.acct_assignment_qty} onChange={e => updLine(i, { acct_assignment_qty: parseFloat(e.target.value) || 0 })} /></div>
+                <div><FieldLabel required helpKey="cost_centre">Cost Centre</FieldLabel>
                   <Select value={l.cost_centre} onChange={e => updLine(i, { cost_centre: e.target.value })}>
                     <option value="">—</option>
                     {masters.ccs.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
                   </Select>
                 </div>
-                <div><Label required>G/L Account</Label>
+                <div><FieldLabel required helpKey="gl_account">G/L Account (G/L Acct)</FieldLabel>
                   <Select value={l.gl_account} onChange={e => updLine(i, { gl_account: e.target.value })}>
                     <option value="">—</option>
                     {masters.gls.filter(g => g.expense_type === hdr.pr_type).map(g => <option key={g.code} value={g.code}>{g.code} — {g.name} ({g.expense_type})</option>)}
                   </Select>
                 </div>
-                <div><Label required>Cost Bearer (Cost Centre)</Label>
+                <div><FieldLabel required helpKey="cost_bearer">Cost Centre (Cost Bearer)</FieldLabel>
                   <Select value={l.cost_bearer} onChange={e => updLine(i, { cost_bearer: e.target.value })}>
                     <option value="">—</option>
                     {masters.ccs.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
@@ -214,12 +218,12 @@ export default function NewPRClient({ masters }: { masters: Master }) {
       {/* Step 3 — Review & Submit */}
       {step === 3 && (
         <Card className="space-y-4">
-          <h2 className="text-lg font-semibold">Section 3 — Review</h2>
+          <h2 className="text-lg font-semibold">Section 3 — Review & Submit</h2>
           <p className="text-sm text-slate-600">Confirm and submit. Once submitted, the PR enters the approval workflow based on the total amount.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="text-slate-500">Requestor:</span> {hdr.requirement_received_from}</div>
-            <div><span className="text-slate-500">Dept / Loc:</span> {hdr.department} / {hdr.location}</div>
+            <div><span className="text-slate-500">Requirement Received From:</span> {hdr.requirement_received_from}</div>
+            <div><span className="text-slate-500">Department / Location:</span> {hdr.department} / {hdr.location}</div>
             <div><span className="text-slate-500">PR Type:</span> {hdr.pr_type}</div>
             {hdr.pr_type === "CAPEX" && (<>
               <div><span className="text-slate-500">CR ID:</span> {hdr.cr_id}</div>

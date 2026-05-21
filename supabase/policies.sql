@@ -23,14 +23,18 @@ alter table public.pr_comments enable row level security;
 alter table public.audit_log enable row level security;
 
 -- Helper: am I an admin?
+-- SECURITY DEFINER so this query bypasses RLS on app_users
+-- (otherwise the app_users RLS would call is_admin again -> infinite recursion)
 create or replace function public.is_admin(uid uuid) returns boolean
-  language sql stable as $$
+  language sql stable security definer set search_path = public as $$
     select coalesce((select is_admin from public.app_users where id = uid), false);
   $$;
 
 -- Helper: am I an approver for this PR right now?
+-- SECURITY DEFINER so this query bypasses RLS on purchase_requests
+-- (otherwise the purchase_requests RLS would call is_current_approver again -> infinite recursion)
 create or replace function public.is_current_approver(prid uuid, uid uuid) returns boolean
-  language sql stable as $$
+  language sql stable security definer set search_path = public as $$
     select exists (
       select 1 from public.purchase_requests pr
       join public.approval_rules ar on ar.id = pr.approval_rule_id

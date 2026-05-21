@@ -26,6 +26,7 @@ export default function TopNav({ email, isAdmin }: { email: string; isAdmin: boo
             {link("/dashboard", "My PRs")}
             {link("/pr/new", "New PR")}
             {link("/queue", "Approval Queue")}
+            {link("/tracker", "Tracker")}
             {isAdmin && link("/admin", "Admin")}
           </nav>
         </div>
@@ -38,6 +39,7 @@ export default function TopNav({ email, isAdmin }: { email: string; isAdmin: boo
         {link("/dashboard", "PRs")}
         {link("/pr/new", "New")}
         {link("/queue", "Queue")}
+        {link("/tracker", "Tracker")}
         {isAdmin && link("/admin", "Admin")}
       </nav>
     </header>
