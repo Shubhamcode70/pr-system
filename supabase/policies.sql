@@ -51,6 +51,25 @@ create or replace function public.is_current_approver(prid uuid, uid uuid) retur
     );
   $$;
 
+-- Helper: full "can this user see this PR" check, SECURITY DEFINER to avoid
+-- cross-table RLS recursion (purchase_requests <-> pr_approvals).
+create or replace function public.can_view_pr(prid uuid, uid uuid) returns boolean
+  language sql stable security definer set search_path = public as $$
+    select
+      exists (select 1 from public.purchase_requests where id = prid and requester_id = uid)
+      or public.is_admin(uid)
+      or public.is_current_approver(prid, uid)
+      or exists (select 1 from public.pr_approvals where pr_id = prid and approver_id = uid);
+  $$;
+
+-- Helper: can this user write a child row (line item, attachment, comment) for this PR?
+create or replace function public.can_write_pr_child(prid uuid, uid uuid) returns boolean
+  language sql stable security definer set search_path = public as $$
+    select
+      public.is_admin(uid)
+      or exists (select 1 from public.purchase_requests where id = prid and requester_id = uid and status in ('draft','reverted'));
+  $$;
+
 -- ---------- app_users ----------
 drop policy if exists "users read self or admin" on public.app_users;
 create policy "users read self or admin" on public.app_users
@@ -80,15 +99,10 @@ begin
 end $$;
 
 -- ---------- purchase_requests ----------
+-- Use SECURITY DEFINER helper to avoid recursion through pr_approvals' policy.
 drop policy if exists "pr select" on public.purchase_requests;
 create policy "pr select" on public.purchase_requests for select
-  using (
-    requester_id = auth.uid()
-    or public.is_admin(auth.uid())
-    or public.is_current_approver(id, auth.uid())
-    -- Allow approvers/admins to also see their decision history later
-    or exists (select 1 from public.pr_approvals a where a.pr_id = purchase_requests.id and a.approver_id = auth.uid())
-  );
+  using (public.can_view_pr(id, auth.uid()));
 drop policy if exists "pr insert own" on public.purchase_requests;
 create policy "pr insert own" on public.purchase_requests for insert
   with check (requester_id = auth.uid());
@@ -104,45 +118,23 @@ create policy "pr delete own draft" on public.purchase_requests for delete
   using (public.is_admin(auth.uid()) or (requester_id = auth.uid() and status = 'draft'));
 
 -- ---------- pr_line_items, pr_attachments, pr_comments — inherit from parent PR ----------
+-- All using SECURITY DEFINER helpers to avoid recursion.
 do $$
 declare t text;
 begin
   foreach t in array array['pr_line_items','pr_attachments','pr_comments']
   loop
     execute format('drop policy if exists "child select via pr" on public.%I', t);
-    execute format($f$create policy "child select via pr" on public.%I for select using (
-      exists (select 1 from public.purchase_requests pr where pr.id = %I.pr_id and (
-        pr.requester_id = auth.uid()
-        or public.is_admin(auth.uid())
-        or public.is_current_approver(pr.id, auth.uid())
-        or exists (select 1 from public.pr_approvals a where a.pr_id = pr.id and a.approver_id = auth.uid())
-      ))
-    )$f$, t, t);
+    execute format('create policy "child select via pr" on public.%I for select using (public.can_view_pr(pr_id, auth.uid()))', t);
     execute format('drop policy if exists "child write via pr" on public.%I', t);
-    execute format($f$create policy "child write via pr" on public.%I for all using (
-      exists (select 1 from public.purchase_requests pr where pr.id = %I.pr_id and (
-        public.is_admin(auth.uid())
-        or (pr.requester_id = auth.uid() and pr.status in ('draft','reverted'))
-      ))
-    ) with check (
-      exists (select 1 from public.purchase_requests pr where pr.id = %I.pr_id and (
-        public.is_admin(auth.uid())
-        or (pr.requester_id = auth.uid() and pr.status in ('draft','reverted'))
-      ))
-    )$f$, t, t, t);
+    execute format('create policy "child write via pr" on public.%I for all using (public.can_write_pr_child(pr_id, auth.uid())) with check (public.can_write_pr_child(pr_id, auth.uid()))', t);
   end loop;
 end $$;
 
 -- ---------- pr_approvals ----------
 drop policy if exists "appr select via pr" on public.pr_approvals;
-create policy "appr select via pr" on public.pr_approvals for select using (
-  exists (select 1 from public.purchase_requests pr where pr.id = pr_approvals.pr_id and (
-    pr.requester_id = auth.uid()
-    or public.is_admin(auth.uid())
-    or public.is_current_approver(pr.id, auth.uid())
-    or pr_approvals.approver_id = auth.uid()
-  ))
-);
+create policy "appr select via pr" on public.pr_approvals for select
+  using (approver_id = auth.uid() or public.can_view_pr(pr_id, auth.uid()));
 drop policy if exists "appr insert by approver" on public.pr_approvals;
 create policy "appr insert by approver" on public.pr_approvals for insert
   with check (approver_id = auth.uid() and public.is_current_approver(pr_id, auth.uid()));
